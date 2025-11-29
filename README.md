@@ -1,24 +1,18 @@
-<p align="center"><img src="https://i.imgur.com/X7dSE68.png"></p>
+<p align="center"><img src="https://i.imgur.com/Tp7AJyT.png"></p>
 
 ## Usage
 
 ### Create an App
 
 ```
-# with npx
-$ npx create-nextron-app my-app --example basic-lang-javascript
-
-# with yarn
-$ yarn create nextron-app my-app --example basic-lang-javascript
-
-# with pnpm
-$ pnpm dlx create-nextron-app my-app --example basic-lang-javascript
+# with git
+$ git clone https://github.com/jekigates/nextron-with-shadcn-ui
 ```
 
 ### Install Dependencies
 
 ```
-$ cd my-app
+$ cd nextron-with-shadcn-ui
 
 # using yarn or npm
 $ yarn (or `npm install`)

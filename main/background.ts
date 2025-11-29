@@ -23,10 +23,10 @@ if (isProd) {
     });
 
     if (isProd) {
-        await mainWindow.loadURL('app://./');
+        await mainWindow.loadURL('app://./login');
     } else {
         const port = process.argv[2];
-        await mainWindow.loadURL(`http://localhost:${port}/`);
+        await mainWindow.loadURL(`http://localhost:${port}/login`);
         mainWindow.webContents.openDevTools();
     }
 })();
@@ -35,6 +35,6 @@ app.on('window-all-closed', () => {
     app.quit();
 });
 
-ipcMain.on('message', async (event: Electron.IpcMainEvent, arg: any) => {
+ipcMain.on('message', async (event, arg) => {
     event.reply('message', `${arg} World!`);
 });
