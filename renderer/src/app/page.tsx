@@ -1,5 +1,6 @@
+"use client";
+
 import React from "react";
-import Head from "next/head";
 import Link from "next/link";
 import Image from "next/image";
 
@@ -26,10 +27,8 @@ export default function HomePage() {
   };
 
   return (
-    <React.Fragment>
-      <Head>
-        <title>Home - Nextron (basic-lang-javascript)</title>
-      </Head>
+    <div>
+      <h1>Home - Nextron (basic-lang-javascript)</h1>
       <div>
         <p>
           ⚡ Electron + Next.js ⚡ - <Link href="/next">Go to next page</Link>
@@ -45,6 +44,7 @@ export default function HomePage() {
         <button onClick={handleButtonClick}>Test IPC</button>
         <p>{message}</p>
       </div>
-    </React.Fragment>
+    </div>
   );
 }
+
