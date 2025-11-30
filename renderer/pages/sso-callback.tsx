@@ -1,13 +1,14 @@
-import React, { useEffect } from "react";
-import { useRouter } from "next/router";
-import { useAuth } from "@clerk/nextjs";
-import { Loader2 } from "lucide-react";
+import React, { useEffect } from 'react';
+import { NextPage } from 'next';
+import { useRouter } from 'next/router';
+import { useAuth } from '@clerk/nextjs';
+import { Loader2 } from 'lucide-react';
 
 /**
  * SSO認証のコールバックページ
  * ClerkのOAuth認証完了後にリダイレクトされる
  */
-export default function SSOCallback() {
+const SSOCallback: NextPage = () => {
     const { isSignedIn, isLoaded } = useAuth();
     const router = useRouter();
 
@@ -15,11 +16,16 @@ export default function SSOCallback() {
         if (!isLoaded) return;
 
         if (isSignedIn) {
-            // 認証成功時、ダッシュボードにリダイレクト
-            router.push("/dashboard");
+            // 認証成功時、redirect_urlパラメータがある場合はそこにリダイレクト、なければ/へ
+            const redirectUrl = router.query.redirect_url as string;
+            if (redirectUrl) {
+                router.push(redirectUrl);
+            } else {
+                router.push('/');
+            }
         } else {
             // 認証失敗時、ログインページにリダイレクト
-            router.push("/");
+            router.push('/');
         }
     }, [isSignedIn, isLoaded, router]);
 
@@ -31,5 +37,6 @@ export default function SSOCallback() {
             </div>
         </div>
     );
-}
+};
 
+export default SSOCallback;

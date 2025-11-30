@@ -15,8 +15,8 @@ function MyApp({ Component, pageProps }: AppProps) {
             publishableKey={process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}
             // リダイレクトURLを明示的に指定（Electronアプリの場合）
             signInUrl="/"
-            signUpUrl="/sign-up"
-            fallbackRedirectUrl="/dashboard"
+            signUpUrl="/signup"
+            fallbackRedirectUrl="/"
         >
             <ThemeProvider
                 attribute="class"

@@ -13,7 +13,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { Eye, EyeOff, Loader2, Slack, X } from 'lucide-react';
+import { Eye, EyeOff, Loader2, X } from 'lucide-react';
+import { SlackIconSVG } from '@/components/SlackIcon';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { SubmitHandler, useForm } from 'react-hook-form';
@@ -53,7 +54,7 @@ const LoginPage: NextPage = () => {
             if (redirectUrl) {
                 router.push(redirectUrl);
             } else {
-                router.push('/index');
+                router.push('/');
             }
         }
     }, [isSignedIn, router]);
@@ -79,7 +80,7 @@ const LoginPage: NextPage = () => {
                         if (redirectUrl) {
                             router.push(redirectUrl);
                         } else {
-                            router.push('/index');
+                            router.push('/');
                         }
                     } else {
                         // 追加の認証が必要な場合（2FA等）
@@ -123,7 +124,7 @@ const LoginPage: NextPage = () => {
                     await signIn.authenticateWithRedirect({
                         strategy: provider,
                         redirectUrl: getRedirectUrl(), // 完全なURLを指定
-                        redirectUrlComplete: '/index', // 認証完了後のリダイレクト先
+                        redirectUrlComplete: '/', // 認証完了後のリダイレクト先
                     });
                 } catch (err: any) {
                     console.error('Social login error:', err);
@@ -181,7 +182,7 @@ const LoginPage: NextPage = () => {
                                         variant="ghost"
                                         disabled={isLoading}
                                         size="icon"
-                                        className="absolute right-0 top-1/2 -translate-y-1/2 cursor-pointer"
+                                        className="absolute right-2 top-1/2 -translate-y-1/2 h-6 w-6 cursor-pointer"
                                         onClick={() => setValue('email', '')}
                                     >
                                         <X className="w-4 h-4 text-gray-500" />
@@ -211,7 +212,7 @@ const LoginPage: NextPage = () => {
                                     variant="ghost"
                                     disabled={isLoading}
                                     size="icon"
-                                    className="absolute right-0 top-1/2 -translate-y-1/2 cursor-pointer"
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 h-6 w-6 cursor-pointer"
                                     onClick={() => setShowPassword(!showPassword)}
                                 >
                                     {showPassword ? (
@@ -228,7 +229,7 @@ const LoginPage: NextPage = () => {
 
                         <div className="text-right">
                             <Link
-                                href="/forgot-password"
+                                href="/forget-password"
                                 className="text-sm text-blue-600 hover:text-blue-500"
                             >
                                 パスワードを忘れた方
@@ -269,7 +270,7 @@ const LoginPage: NextPage = () => {
                             onClick={() => handleSocialLogin('oauth_slack')}
                             disabled={isLoading}
                         >
-                            <Slack className="mr-2 h-4 w-4" />
+                            <SlackIconSVG className="mr-2" />
                             Slackでログイン
                         </Button>
                     </div>
@@ -279,7 +280,7 @@ const LoginPage: NextPage = () => {
                     <div className="text-center text-sm">
                         <span className="text-gray-600">アカウントをお持ちでない方は </span>
                         <Link
-                            href="/sign-up"
+                            href="/signup"
                             className="text-blue-600 hover:text-blue-500 font-medium cursor-pointer"
                         >
                             新規登録

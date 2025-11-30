@@ -7,7 +7,9 @@ import { NextResponse } from 'next/server';
 const isPublicRoute = createRouteMatcher([
     '/login(.*)', // ログインページ
     '/sign-up(.*)',
+    '/signup(.*)', // 新規登録ページ（signup.tsx）
     '/forgot-password(.*)',
+    '/forget-password(.*)', // パスワード再設定ページ（forget-password.tsx）
     '/sso-callback(.*)',
     '/', // ルートページも公開（必要に応じて）
 ]);
