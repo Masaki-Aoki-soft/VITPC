@@ -33,7 +33,8 @@ export const savePCInfo = async (
     fullName: string | null
 ): Promise<void> => {
     try {
-        const response = await fetch('/api/pc-info', {
+        // trailingSlash: trueの設定に対応するため、末尾にスラッシュを追加
+        const response = await fetch('/api/pc-info/', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -86,5 +87,45 @@ export const savePCInfo = async (
     } catch (error: any) {
         console.error('PC情報の保存に失敗:', error);
         throw new Error(error.message || 'PC情報の保存に失敗しました');
+    }
+};
+
+/**
+ * データベースから全ユーザーのPC情報を取得する関数
+ * getInfo.tsを使用してデータを取得
+ * @param getAll 全ユーザーの情報を取得するかどうか（デフォルト: true）
+ */
+export const fetchAllPCInfo = async (getAll: boolean = true): Promise<any[]> => {
+    try {
+        // 末尾のスラッシュを削除してHonoのルーティングにマッチさせる
+        const url = getAll ? '/api/pc-info?all=true' : '/api/pc-info';
+        const response = await fetch(url, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({
+                error: 'PC情報の取得に失敗しました',
+            }));
+            throw new Error(errorData.error || 'PC情報の取得に失敗しました');
+        }
+
+        const data = await response.json();
+
+        // getAll=trueの場合は { data: [...], count: number } の形式
+        // それ以外の場合は単一のオブジェクト
+        if (getAll && data.data) {
+            return data.data;
+        } else if (!getAll) {
+            return [data];
+        } else {
+            return [];
+        }
+    } catch (error: any) {
+        console.error('PC情報の取得に失敗:', error);
+        throw new Error(error.message || 'PC情報の取得に失敗しました');
     }
 };

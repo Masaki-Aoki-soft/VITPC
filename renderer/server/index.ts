@@ -7,6 +7,16 @@ import { pcInfoRoute } from './route/PcInfoRoute';
 
 const app = new Hono();
 
+// デバッグ用: すべてのリクエストをログに記録（最初に実行）
+app.use('*', async (c, next) => {
+    console.log('[Hono App] リクエスト受信:', {
+        method: c.req.method,
+        url: c.req.url,
+        path: c.req.path,
+    });
+    await next();
+});
+
 // ミドルウェア
 app.use('*', logger());
 app.use(

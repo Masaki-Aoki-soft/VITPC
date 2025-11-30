@@ -8,12 +8,23 @@ export const sendInfo = new Hono();
 // POST: PC情報を保存
 // userIdはリクエストボディから取得
 sendInfo.post('/', async (c) => {
+    console.log('[Hono sendInfo] POSTリクエスト受信:', {
+        url: c.req.url,
+        method: c.req.method,
+    });
+
     try {
         if (!db) {
+            console.error('[Hono sendInfo] データベース接続が設定されていません');
             return c.json({ error: 'データベース接続が設定されていません' }, 500);
         }
 
         const body = await c.req.json();
+        console.log('[Hono sendInfo] リクエストボディ受信:', {
+            userId: body.userId,
+            fullName: body.fullName,
+            hostname: body.hostname,
+        });
 
         // userIdとfullNameをリクエストボディから取得
         const userId = body.userId;
