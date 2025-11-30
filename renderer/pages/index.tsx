@@ -1,19 +1,21 @@
-/* Dashboardページ */
+/* Dashboardページ - PC情報表示 */
 
 import React, { useEffect } from 'react';
 import Head from 'next/head';
-import Link from 'next/link';
-import Image from 'next/image';
 import { NextPage } from 'next';
 import { useRouter } from 'next/router';
 import { useAuth } from '@clerk/nextjs';
-import { buttonVariants } from '@/components/ui/button';
 import { Navbar } from '@/components/site-header';
-import { SlackIconSVG } from '@/components/SlackIcon';
+import { PCInfoCard } from '@/components/pc-info-card';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Loader2, RefreshCw } from 'lucide-react';
+import { usePCInfo } from '@/hooks/usePCInfo';
 
 const Dashboard: NextPage = () => {
     const router = useRouter();
     const { isSignedIn, isLoaded } = useAuth();
+    const { pcInfo, isLoading, error, mutate, isValidating } = usePCInfo();
 
     // 認証チェック
     useEffect(() => {
@@ -28,8 +30,8 @@ const Dashboard: NextPage = () => {
     if (!isLoaded || !isSignedIn) {
         return (
             <div className="min-h-screen flex items-center justify-center">
-                <div className="flex items-center">
-                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-900"></div>
+                <div className="flex items-center space-x-2">
+                    <Loader2 className="h-6 w-6 animate-spin" />
                     <span>読み込み中...</span>
                 </div>
             </div>
@@ -39,59 +41,81 @@ const Dashboard: NextPage = () => {
     return (
         <React.Fragment>
             <Head>
-                <title>Home - Nextron (With Shadcn/UI)</title>
+                <title>ダッシュボード - VITPC</title>
             </Head>
 
             <div className="relative flex min-h-screen flex-col bg-background">
-                <div className="w-full h-screen flex flex-col items-center justify-center">
-                    <Navbar />
-                    <div className="flex-1 flex flex-col justify-center items-center w-full space-y-8">
-                        <div>
-                            <SlackIconSVG />
+                <Navbar />
+                <div className="container mx-auto px-4 py-8 max-w-4xl">
+                    <div className="space-y-6">
+                        {/* ヘッダー */}
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <h1 className="text-3xl font-bold">ダッシュボード</h1>
+                                <p className="text-muted-foreground mt-1">
+                                    このPCの情報を表示します
+                                </p>
+                            </div>
+                            <Button
+                                onClick={() => mutate()}
+                                disabled={isLoading || isValidating}
+                                variant="outline"
+                            >
+                                {isLoading || isValidating ? (
+                                    <>
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                        取得中...
+                                    </>
+                                ) : (
+                                    <>
+                                        <RefreshCw className="mr-2 h-4 w-4" />
+                                        更新
+                                    </>
+                                )}
+                            </Button>
                         </div>
 
-                        <div className="text-center text-2xl font-bold flex flex-wrap justify-center gap-6">
-                            <a
-                                href="https://www.electronjs.org/"
-                                target="_blank"
-                                rel="noreferrer"
-                                className="text-[#9feaf9]"
-                            >
-                                ⚡ Electron ⚡
-                            </a>
-
-                            <a href="https://nextjs.org/" target="_blank" rel="noreferrer">
-                                Next.JS
-                            </a>
-
-                            <a
-                                href="https://tailwindcss.com/"
-                                target="_blank"
-                                rel="noreferrer"
-                                className="text-[#38BDF8]"
-                            >
-                                Tailwind CSS
-                            </a>
-
-                            <a href="https://ui.shadcn.com/" target="_blank" rel="noreferrer">
-                                Shadcn/UI
-                            </a>
-
-                            <a
-                                href="https://www.typescriptlang.org/"
-                                target="_blank"
-                                rel="noreferrer"
-                                className="text-[#3178c6]"
-                            >
-                                Typescript
-                            </a>
-                        </div>
-
-                        <div className="w-full flex-wrap flex justify-center">
-                            <Link href="/about" className={buttonVariants()}>
-                                Go To About Page
-                            </Link>
-                        </div>
+                        {/* PC情報カード */}
+                        {isLoading ? (
+                            <Card>
+                                <CardContent className="py-12">
+                                    <div className="flex items-center justify-center space-x-2">
+                                        <Loader2 className="h-6 w-6 animate-spin" />
+                                        <span>PC情報を取得しています...</span>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        ) : error ? (
+                            <Card>
+                                <CardContent className="py-12">
+                                    <div className="text-center space-y-4">
+                                        <p className="text-muted-foreground">
+                                            PC情報の取得に失敗しました
+                                        </p>
+                                        <Button onClick={() => mutate()} variant="outline">
+                                            <RefreshCw className="mr-2 h-4 w-4" />
+                                            再試行
+                                        </Button>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        ) : pcInfo ? (
+                            <PCInfoCard pcInfo={pcInfo} />
+                        ) : (
+                            <Card>
+                                <CardContent className="py-12">
+                                    <div className="text-center space-y-4">
+                                        <p className="text-muted-foreground">
+                                            PC情報が取得できませんでした
+                                        </p>
+                                        <Button onClick={() => mutate()} variant="outline">
+                                            <RefreshCw className="mr-2 h-4 w-4" />
+                                            取得
+                                        </Button>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        )}
                     </div>
                 </div>
             </div>

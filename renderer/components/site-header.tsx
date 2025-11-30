@@ -118,7 +118,7 @@ export const Navbar = () => {
                             <div className="flex items-center min-w-0 flex-1 pl-4 sm:pl-6 lg:pl-8">
                                 <Monitor className="h-5 w-5 sm:h-7 sm:w-7 text-blue-600 mr-2 sm:mr-3 flex-shrink-0" />
                                 <h1 className="text-base sm:text-xl lg:text-2xl font-bold text-gray-900 dark:text-gray-100 truncate">
-                                    Wake
+                                    VITPC
                                 </h1>
                             </div>
                             <div className="flex items-center pr-4 sm:pr-6 lg:pr-8">
@@ -167,7 +167,7 @@ export const Navbar = () => {
                     <div className="flex justify-between items-center py-2 sm:py-3 lg:py-4">
                         <div
                             className="flex items-center min-w-0 flex-1 cursor-pointer pl-4 sm:pl-6 lg:pl-8"
-                            onClick={() => router.push('/dashboard')}
+                            onClick={() => router.push('/')}
                         >
                             <Monitor className="h-5 w-5 sm:h-7 sm:w-7 text-blue-600 mr-2 sm:mr-3 flex-shrink-0" />
                             <h1 className="text-base sm:text-xl lg:text-2xl font-bold text-gray-900 dark:text-gray-100 truncate">

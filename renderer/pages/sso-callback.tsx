@@ -16,16 +16,11 @@ const SSOCallback: NextPage = () => {
         if (!isLoaded) return;
 
         if (isSignedIn) {
-            // 認証成功時、redirect_urlパラメータがある場合はそこにリダイレクト、なければ/へ
-            const redirectUrl = router.query.redirect_url as string;
-            if (redirectUrl) {
-                router.push(redirectUrl);
-            } else {
-                router.push('/');
-            }
+            // 認証成功時、ダッシュボードにリダイレクト
+            router.push('/');
         } else {
             // 認証失敗時、ログインページにリダイレクト
-            router.push('/');
+            router.push('/login');
         }
     }, [isSignedIn, isLoaded, router]);
 

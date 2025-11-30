@@ -1,10 +1,41 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import type { AppProps } from 'next/app';
 import { ClerkProvider } from '@clerk/nextjs';
 import '../styles/globals.css';
 import { ThemeProvider } from '@/components/theme-provider';
+import { useTheme } from 'next-themes';
 import { ToasterContext } from './context/ToastContext';
 import { jaJP } from '@clerk/localizations';
+import { motion, AnimatePresence } from 'framer-motion';
+
+function AppContent({ Component, pageProps }: AppProps) {
+    const { theme } = useTheme();
+    const [currentTheme, setCurrentTheme] = useState<string | undefined>(theme);
+
+    useEffect(() => {
+        if (theme && theme !== currentTheme) {
+            setCurrentTheme(theme);
+        }
+    }, [theme, currentTheme]);
+
+    return (
+        <AnimatePresence mode="wait">
+            <motion.div
+                key={currentTheme || 'light'}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{
+                    duration: 0.3,
+                    ease: [0.4, 0, 0.2, 1],
+                }}
+                style={{ minHeight: '100vh' }}
+            >
+                <Component {...pageProps} />
+            </motion.div>
+        </AnimatePresence>
+    );
+}
 
 function MyApp({ Component, pageProps }: AppProps) {
     return (
@@ -25,7 +56,7 @@ function MyApp({ Component, pageProps }: AppProps) {
                 disableTransitionOnChange
             >
                 <ToasterContext />
-                <Component {...pageProps} />
+                <AppContent Component={Component} pageProps={pageProps} />
             </ThemeProvider>
         </ClerkProvider>
     );
