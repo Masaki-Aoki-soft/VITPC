@@ -13,7 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { Eye, EyeOff, Loader2, Slack } from 'lucide-react';
+import { Eye, EyeOff, Loader2, Slack, X } from 'lucide-react';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { SubmitHandler, useForm } from 'react-hook-form';
@@ -33,6 +33,8 @@ const LoginPage: NextPage = () => {
         register,
         handleSubmit,
         formState: { errors, isValid },
+        setValue,
+        watch,
     } = useForm<LoginFormValues>({
         resolver: zodResolver(loginFormSchema),
         defaultValues: {
@@ -40,6 +42,8 @@ const LoginPage: NextPage = () => {
             password: '',
         },
     });
+
+    const emailValue = watch('email');
 
     // 既にログイン済みの場合はリダイレクト
     useEffect(() => {
@@ -161,15 +165,29 @@ const LoginPage: NextPage = () => {
                     <form onSubmit={handleSubmit(handleEmailLogin)} className="space-y-4">
                         <div className="space-y-2">
                             <Label htmlFor="email">メールアドレス</Label>
-                            <Input
-                                id="email"
-                                type="email"
-                                autoFocus
-                                placeholder="your@email.com"
-                                {...register('email')}
-                                disabled={isLoading}
-                                className={errors.email ? 'border-red-500 ' : ''}
-                            />
+                            <div className="relative">
+                                <Input
+                                    id="email"
+                                    type="email"
+                                    autoFocus
+                                    placeholder="your@email.com"
+                                    {...register('email')}
+                                    disabled={isLoading}
+                                    className={errors.email ? 'border-red-500 pr-10' : 'pr-10'}
+                                />
+                                {emailValue && (
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        disabled={isLoading}
+                                        size="icon"
+                                        className="absolute right-0 top-1/2 -translate-y-1/2 cursor-pointer"
+                                        onClick={() => setValue('email', '')}
+                                    >
+                                        <X className="w-4 h-4 text-gray-500" />
+                                    </Button>
+                                )}
+                            </div>
                             {errors.email && (
                                 <p className="text-sm text-red-500">{errors.email.message}</p>
                             )}
@@ -193,7 +211,7 @@ const LoginPage: NextPage = () => {
                                     variant="ghost"
                                     disabled={isLoading}
                                     size="icon"
-                                    className="absolute right-2 top-1/2 -translate-y-1/2 cursor-pointer"
+                                    className="absolute right-0 top-1/2 -translate-y-1/2 cursor-pointer"
                                     onClick={() => setShowPassword(!showPassword)}
                                 >
                                     {showPassword ? (

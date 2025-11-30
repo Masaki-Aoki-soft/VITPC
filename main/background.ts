@@ -22,7 +22,18 @@ if (isProd) {
         },
     });
 
+    // Content Security Policyの設定（本番環境のみ）
     if (isProd) {
+        mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
+            callback({
+                responseHeaders: {
+                    ...details.responseHeaders,
+                    'Content-Security-Policy': [
+                        "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://*.clerk.accounts.dev https://*.clerk.com;"
+                    ],
+                },
+            });
+        });
         await mainWindow.loadURL('app://./login');
     } else {
         const port = process.argv[2];
