@@ -47,7 +47,6 @@ function MyApp({ Component, pageProps }: AppProps) {
             // リダイレクトURLを明示的に指定（Electronアプリの場合）
             signInUrl="/"
             signUpUrl="/signup"
-            fallbackRedirectUrl="/"
         >
             <ThemeProvider
                 attribute="class"

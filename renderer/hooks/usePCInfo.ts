@@ -39,7 +39,11 @@ export const usePCInfo = (): UsePCInfoReturn => {
     // mutate関数をラップして、成功時にtoastを表示
     const mutateWithToast = async (): Promise<PCInfo | undefined> => {
         try {
-            const result = await mutate();
+            // ElectronからPC情報を取得
+            const pcInfo = await fetchPCInfo();
+
+            // SWRのキャッシュを更新
+            const result = await mutate(pcInfo, { revalidate: false });
             toast.success('PC情報を更新しました');
             return result;
         } catch (err: any) {
@@ -56,4 +60,3 @@ export const usePCInfo = (): UsePCInfoReturn => {
         isValidating,
     };
 };
-

@@ -4,17 +4,19 @@ import React, { useEffect } from 'react';
 import Head from 'next/head';
 import { NextPage } from 'next';
 import { useRouter } from 'next/router';
-import { useAuth } from '@clerk/nextjs';
+import { useAuth, useUser } from '@clerk/nextjs';
 import { Navbar } from '@/components/site-header';
 import { PCInfoCard } from '@/components/pc-info-card';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Loader2, RefreshCw } from 'lucide-react';
 import { usePCInfo } from '@/hooks/usePCInfo';
+import { savePCInfo } from '@/lib/fetcher';
 
 const Dashboard: NextPage = () => {
     const router = useRouter();
     const { isSignedIn, isLoaded } = useAuth();
+    const { user } = useUser();
     const { pcInfo, isLoading, error, mutate, isValidating } = usePCInfo();
 
     // 認証チェック
@@ -25,6 +27,22 @@ const Dashboard: NextPage = () => {
             router.push('/login');
         }
     }, [isSignedIn, isLoaded, router]);
+
+    // PC情報を取得した後にサーバーに保存
+    useEffect(() => {
+        if (!pcInfo || !user?.id) return;
+
+        const saveToServer = async () => {
+            try {
+                await savePCInfo(pcInfo, user.id, user.fullName || null);
+            } catch (error: any) {
+                console.error('PC情報の保存に失敗:', error);
+                // エラーは表示しない（バックグラウンド処理のため）
+            }
+        };
+
+        saveToServer();
+    }, [pcInfo, user?.id, user?.fullName]);
 
     // ローディング中または未ログインの場合は何も表示しない
     if (!isLoaded || !isSignedIn) {
@@ -57,7 +75,21 @@ const Dashboard: NextPage = () => {
                                 </p>
                             </div>
                             <Button
-                                onClick={() => mutate()}
+                                onClick={async () => {
+                                    try {
+                                        const updatedInfo = await mutate();
+                                        // PC情報を取得した後にサーバーに保存
+                                        if (updatedInfo && user?.id) {
+                                            await savePCInfo(
+                                                updatedInfo,
+                                                user.id,
+                                                user.fullName || null
+                                            );
+                                        }
+                                    } catch (error: any) {
+                                        console.error('PC情報の更新に失敗:', error);
+                                    }
+                                }}
                                 disabled={isLoading || isValidating}
                                 variant="outline"
                             >
