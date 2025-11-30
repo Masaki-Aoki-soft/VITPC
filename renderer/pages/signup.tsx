@@ -14,13 +14,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { Eye, EyeOff, Loader2, Slack, X } from 'lucide-react';
+import { Eye, EyeOff, Loader2, X } from 'lucide-react';
 import { FcGoogle } from 'react-icons/fc';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { SubmitHandler, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { signUpFormSchema, SignUpFormValues } from '@/lib/validation';
+import { SlackIconSVG } from '@/components/SlackIcon';
 
 const SignUpPage: NextPage = () => {
     const [isLoading, setIsLoading] = useState(false);
@@ -408,7 +409,7 @@ const SignUpPage: NextPage = () => {
                             onClick={() => handleSocialSignUp('oauth_slack')}
                             disabled={isLoading}
                         >
-                            <Slack className="mr-2 h-4 w-4" />
+                            <SlackIconSVG className="mr-2" />
                             Slackで登録
                         </Button>
                     </div>
