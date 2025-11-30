@@ -15,11 +15,12 @@ if (isProd) {
 }
 
 // 設定ストア（最後にPC情報を取得した日時を保存）
-const store = new Store<{ lastPcInfoFetch: number; autoLaunch: boolean }>({
+const store = new Store<{ lastPcInfoFetch: number; autoLaunch: boolean; setupCompleted: boolean }>({
     name: 'pc-info-schedule',
     defaults: {
         lastPcInfoFetch: 0,
         autoLaunch: true, // デフォルトで自動起動を有効にする
+        setupCompleted: true, // セットアップ完了フラグ（デフォルトで完了として扱う）
     },
 });
 
@@ -42,10 +43,10 @@ async function fetchPCInfoInBackground(): Promise<void> {
             hostname: pcInfo.hostname,
             timestamp: pcInfo.timestamp,
         });
-        
+
         // 最後に取得した日時を更新
         store.set('lastPcInfoFetch', Date.now());
-        
+
         // 必要に応じて、ここでスプレッドシートに書き込むなどの処理を追加できます
         // 例: await writeToSpreadsheet(config, pcInfo);
     } catch (error: any) {
@@ -85,7 +86,7 @@ function schedulePCInfoFetch(): void {
 function createTray(): void {
     // アイコン画像のパス（デフォルトのアイコンを使用）
     const iconPath = path.join(__dirname, '../resources/icon.png');
-    
+
     // アイコンが存在しない場合は、空の画像を使用
     let trayIcon: Electron.NativeImage;
     try {
@@ -157,7 +158,7 @@ function createTray(): void {
  */
 function setupAutoLaunch(): void {
     const autoLaunch = store.get('autoLaunch', true);
-    
+
     // 自動起動の設定
     app.setLoginItemSettings({
         openAtLogin: autoLaunch,
@@ -188,7 +189,40 @@ ipcMain.handle('get-auto-launch', () => {
     return { enabled: store.get('autoLaunch', true) };
 });
 
+/**
+ * セットアップ完了フラグを設定するIPCハンドラー
+ */
+ipcMain.handle('complete-setup', () => {
+    store.set('setupCompleted', true);
+    return { success: true };
+});
+
+/**
+ * セットアップ完了フラグを取得するIPCハンドラー
+ */
+ipcMain.handle('get-setup-status', () => {
+    return { completed: store.get('setupCompleted', false) };
+});
+
 (async () => {
+    // 単一インスタンスロック（既に実行中のアプリがある場合は既存のウィンドウを表示）
+    const gotTheLock = app.requestSingleInstanceLock();
+
+    if (!gotTheLock) {
+        // 既に別のインスタンスが実行中
+        app.quit();
+        return;
+    }
+
+    // 2つ目のインスタンスが起動されたときに既存のウィンドウを表示
+    app.on('second-instance', () => {
+        if (mainWindow) {
+            if (mainWindow.isMinimized()) mainWindow.restore();
+            mainWindow.show();
+            mainWindow.focus();
+        }
+    });
+
     await app.whenReady();
 
     // 自動起動の設定
@@ -201,16 +235,39 @@ ipcMain.handle('get-auto-launch', () => {
 
     // コマンドライン引数から自動起動かどうかを判定
     // --hidden フラグがある場合は、ウィンドウを表示せずにバックグラウンドで実行
-    const isAutoLaunch = process.argv.includes('--hidden') || process.argv.includes('--open-as-hidden');
+    const isAutoLaunch =
+        process.argv.includes('--hidden') || process.argv.includes('--open-as-hidden');
     
-    mainWindow = createWindow('main', {
-        width: 1000,
-        height: 600,
-        webPreferences: {
-            preload: path.join(__dirname, 'preload.js'),
-        },
-        show: !isAutoLaunch, // 自動起動の場合はウィンドウを表示しない
-    });
+    // セットアップが完了しているかチェック
+    const setupCompleted = store.get('setupCompleted', false);
+    
+    // 初回起動時（セットアップ未完了）は、自動起動フラグがあってもウィンドウを表示
+    const shouldShowWindow = !isAutoLaunch || !setupCompleted;
+
+    try {
+        mainWindow = createWindow('main', {
+            width: 1000,
+            height: 600,
+            webPreferences: {
+                preload: path.join(__dirname, 'preload.js'),
+            },
+            show: shouldShowWindow, // 初回起動時はウィンドウを表示
+        });
+        
+        // ページが読み込まれたらウィンドウを確実に表示（初回起動時）
+        if (shouldShowWindow) {
+            mainWindow.webContents.once('did-finish-load', () => {
+                if (mainWindow && !mainWindow.isVisible()) {
+                    mainWindow.show();
+                    mainWindow.focus();
+                }
+            });
+        }
+    } catch (error) {
+        // ウィンドウ作成に失敗した場合はアプリを終了
+        app.quit();
+        return;
+    }
 
     // ウィンドウを閉じたときにアプリを終了させない（バックグラウンドで実行）
     mainWindow.on('close', (event) => {
@@ -227,15 +284,67 @@ ipcMain.handle('get-auto-launch', () => {
                 responseHeaders: {
                     ...details.responseHeaders,
                     'Content-Security-Policy': [
-                        "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://*.clerk.accounts.dev https://*.clerk.com;"
+                        "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://*.clerk.accounts.dev https://*.clerk.com;",
                     ],
                 },
             });
         });
-        await mainWindow.loadURL('app://./login');
+        // セットアップが完了していない場合はセットアップページへ、完了している場合はログインページへ
+        const loadPageWithFallback = async (): Promise<void> => {
+            const urls = !setupCompleted 
+                ? ['app://./setup/', 'app://./login/']
+                : ['app://./login/'];
+            
+            for (const url of urls) {
+                try {
+                    await mainWindow!.loadURL(url);
+                    // ページが読み込まれたか確認（短い待機時間）
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    // 成功した場合はループを抜ける
+                    return;
+                } catch (error) {
+                    // 次のURLを試す
+                    continue;
+                }
+            }
+            
+            // すべて失敗した場合は、セットアップを完了としてマークしてログインページを再試行
+            if (!setupCompleted) {
+                store.set('setupCompleted', true);
+                try {
+                    await mainWindow!.loadURL('app://./login/');
+                } catch {
+                    // 最終的なフォールバック
+                    mainWindow!.loadURL('about:blank');
+                }
+            } else {
+                // 最終的なフォールバック
+                mainWindow!.loadURL('about:blank');
+            }
+        };
+        
+        await loadPageWithFallback();
     } else {
         const port = process.argv[2];
-        await mainWindow.loadURL(`http://localhost:${port}/login`);
+        // セットアップが完了していない場合はセットアップページへ、完了している場合はログインページへ
+        let loadSuccess = false;
+        if (!setupCompleted) {
+            try {
+                await mainWindow.loadURL(`http://localhost:${port}/setup`);
+                loadSuccess = true;
+            } catch (error) {
+                loadSuccess = false;
+            }
+        }
+        
+        if (!loadSuccess) {
+            try {
+                await mainWindow.loadURL(`http://localhost:${port}/login`);
+            } catch (fallbackError) {
+                // フォールバックも失敗した場合は空のページを表示
+                mainWindow.loadURL('about:blank');
+            }
+        }
         mainWindow.webContents.openDevTools();
     }
 

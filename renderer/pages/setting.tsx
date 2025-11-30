@@ -34,3 +34,4 @@ const SettingPage: NextPage = () => {
 };
 
 export default SettingPage;
+

@@ -10,3 +10,14 @@ files:
       - package.json
       - app
 publish: null
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  allowElevation: true
+  runAfterFinish: true
+  deleteAppDataOnUninstall: true
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64

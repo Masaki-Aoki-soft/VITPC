@@ -5,3 +5,4 @@ import { getInfo } from './getInfo';
 import { sendInfo } from './sendInfo';
 
 export const pcInfoRoute = new Hono().route('/', getInfo).route('/', sendInfo);
+

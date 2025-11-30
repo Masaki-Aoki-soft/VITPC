@@ -4,11 +4,11 @@ import { ClerkProvider } from '@clerk/nextjs';
 import '../styles/globals.css';
 import { ThemeProvider } from '@/components/theme-provider';
 import { useTheme } from 'next-themes';
-import { ToasterContext } from './context/ToastContext';
+import { ToasterContext } from '@/context/ToastContext';
 import { jaJP } from '@clerk/localizations';
 import { motion, AnimatePresence } from 'framer-motion';
 
-function AppContent({ Component, pageProps }: AppProps) {
+function AppContent({ Component, pageProps, router }: AppProps) {
     const { theme } = useTheme();
     const [currentTheme, setCurrentTheme] = useState<string | undefined>(theme);
 
@@ -31,13 +31,13 @@ function AppContent({ Component, pageProps }: AppProps) {
                 }}
                 style={{ minHeight: '100vh' }}
             >
-                <Component {...pageProps} />
+                <Component {...pageProps} router={router} />
             </motion.div>
         </AnimatePresence>
     );
 }
 
-function MyApp({ Component, pageProps }: AppProps) {
+function MyApp({ Component, pageProps, router }: AppProps) {
     return (
         <ClerkProvider
             localization={jaJP}
@@ -55,7 +55,7 @@ function MyApp({ Component, pageProps }: AppProps) {
                 disableTransitionOnChange
             >
                 <ToasterContext />
-                <AppContent Component={Component} pageProps={pageProps} />
+                <AppContent Component={Component} pageProps={pageProps} router={router} />
             </ThemeProvider>
         </ClerkProvider>
     );
