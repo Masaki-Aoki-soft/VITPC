@@ -7,7 +7,7 @@ import { useRouter } from 'next/router';
 import { Button } from '@/components/ui/button';
 import { Switch } from '../components/ui/switch';
 import { useTheme } from 'next-themes';
-import { useUser, useAuth, useClerk } from '@clerk/nextjs';
+import { useUser, useAuth, useClerk } from '@clerk/clerk-react';
 import { LogOut, Monitor, Settings, Loader2, Sun, Moon } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {

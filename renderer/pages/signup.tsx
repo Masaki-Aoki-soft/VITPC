@@ -6,22 +6,21 @@
 import type React from 'react';
 import { useState, useEffect } from 'react';
 import { NextPage } from 'next';
-import { useRouter } from 'next/router';
-import { useSignUp, useAuth } from '@clerk/nextjs';
+import { useRouter } from 'next/navigation';
+import { useSignUp, useAuth } from '@clerk/clerk-react';
 import { OAuthStrategy } from '@clerk/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { Eye, EyeOff, Loader2, X } from 'lucide-react';
+import { Eye, EyeOff, Loader2, Slack, X } from 'lucide-react';
 import { FcGoogle } from 'react-icons/fc';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { SubmitHandler, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { signUpFormSchema, SignUpFormValues } from '@/lib/validation';
-import { SlackIconSVG } from '@/components/SlackIcon';
 
 const SignUpPage: NextPage = () => {
     const [isLoading, setIsLoading] = useState(false);
@@ -83,7 +82,7 @@ const SignUpPage: NextPage = () => {
                 await setActive({ session: result.createdSessionId });
                 // セッションストレージにメール登録成功フラグを設定
                 sessionStorage.setItem('emailSignUpSuccess', 'true');
-                router.push('/?signup=success');
+                router.push('/dashboard?signup=success');
             }
         } catch (err: any) {
             console.error('Sign up error:', err);
@@ -114,7 +113,7 @@ const SignUpPage: NextPage = () => {
                         await setActive({ session: result.createdSessionId });
                         // セッションストレージにメール認証成功フラグを設定
                         sessionStorage.setItem('emailVerificationSuccess', 'true');
-                        router.push('/?signup=success');
+                        router.push('/dashboard?signup=success');
                         resolve('登録が完了しました！');
                     } else {
                         reject('確認に失敗しました。もう一度お試しください。');
@@ -151,7 +150,7 @@ const SignUpPage: NextPage = () => {
             await signUp.authenticateWithRedirect({
                 strategy: provider,
                 redirectUrl: '/sso-callback', // SSO用のコールバックページ
-                redirectUrlComplete: '/?signup=success', // 認証完了後のリダイレクト先にクエリパラメータを追加
+                redirectUrlComplete: '/dashboard?signup=success', // 認証完了後のリダイレクト先にクエリパラメータを追加
             });
         } catch (err: any) {
             console.error('Social sign up error:', err);
@@ -325,7 +324,7 @@ const SignUpPage: NextPage = () => {
                                     variant="ghost"
                                     disabled={isLoading}
                                     size="icon"
-                                    className="absolute right-2 top-1/2 -translate-y-1/2 h-6 w-6 cursor-pointer"
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 cursor-pointer"
                                     onClick={() => setShowPassword(!showPassword)}
                                 >
                                     {showPassword ? (
@@ -358,7 +357,7 @@ const SignUpPage: NextPage = () => {
                                     variant="ghost"
                                     disabled={isLoading}
                                     size="icon"
-                                    className="absolute right-2 top-1/2 -translate-y-1/2 h-6 w-6 cursor-pointer"
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 cursor-pointer"
                                     onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                                 >
                                     {showConfirmPassword ? (
@@ -409,7 +408,7 @@ const SignUpPage: NextPage = () => {
                             onClick={() => handleSocialSignUp('oauth_slack')}
                             disabled={isLoading}
                         >
-                            <SlackIconSVG className="mr-2" />
+                            <Slack className="mr-2 h-4 w-4" />
                             Slackで登録
                         </Button>
                     </div>

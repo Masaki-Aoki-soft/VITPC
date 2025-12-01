@@ -1,6 +1,7 @@
 /* PC情報管理用カスタムフック（SWR使用） */
 
 import useSWR from 'swr';
+import { useAuth } from '@clerk/clerk-react';
 import { PCInfo } from '@/components/pc-info-card';
 import { fetchPCInfo } from '@/lib/fetcher';
 import toast from 'react-hot-toast';
@@ -18,9 +19,17 @@ interface UsePCInfoReturn {
  * SWRを使用してデータをキャッシュし、ページ遷移後もデータを保持
  */
 export const usePCInfo = (): UsePCInfoReturn => {
+    const { getToken } = useAuth();
+
+    // SWRのfetcher関数を定義（トークンを取得してfetchPCInfoに渡す）
+    const fetcher = async (): Promise<PCInfo> => {
+        const token = await getToken();
+        return fetchPCInfo(token || undefined);
+    };
+
     const { data, error, mutate, isValidating } = useSWR<PCInfo>(
         'pc-info', // SWRのキー
-        fetchPCInfo,
+        fetcher,
         {
             revalidateOnFocus: false, // フォーカス時の再検証を無効化
             revalidateOnReconnect: true, // 再接続時に再検証
@@ -39,8 +48,9 @@ export const usePCInfo = (): UsePCInfoReturn => {
     // mutate関数をラップして、成功時にtoastを表示
     const mutateWithToast = async (): Promise<PCInfo | undefined> => {
         try {
-            // ElectronからPC情報を取得
-            const pcInfo = await fetchPCInfo();
+            // トークンを取得してPC情報を取得
+            const token = await getToken();
+            const pcInfo = await fetchPCInfo(token || undefined);
 
             // SWRのキャッシュを更新
             const result = await mutate(pcInfo, { revalidate: false });

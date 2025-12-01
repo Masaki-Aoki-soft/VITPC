@@ -1,0 +1,6 @@
+{
+    "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_Y29zbWljLWJ1bGxmcm9nLTk5LmNsZXJrLmFjY291bnRzLmRldiQ",
+    "CLERK_SECRET_KEY": "sk_test_93DanpD1xKjECwm5uXb1VKPvpwImRsw0mxnjHoklrB",
+    "NEXT_PUBLIC_APP_BASE_URL": "http://localhost:3000",
+    "DATABASE_URL": "postgresql://neondb_owner:npg_NHJgSAokF7e0@ep-rapid-cell-a1o2lcal-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+}

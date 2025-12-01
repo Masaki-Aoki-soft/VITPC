@@ -6,15 +6,14 @@ import type React from 'react';
 import { useState, useEffect } from 'react';
 import { NextPage } from 'next';
 import { useRouter } from 'next/router';
-import { useSignIn, useAuth } from '@clerk/nextjs';
+import { useSignIn, useAuth } from '@clerk/clerk-react';
 import { OAuthStrategy } from '@clerk/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { Eye, EyeOff, Loader2, X } from 'lucide-react';
-import { SlackIconSVG } from '@/components/SlackIcon';
+import { Eye, EyeOff, Loader2, Slack } from 'lucide-react';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { SubmitHandler, useForm } from 'react-hook-form';
@@ -34,8 +33,6 @@ const LoginPage: NextPage = () => {
         register,
         handleSubmit,
         formState: { errors, isValid },
-        setValue,
-        watch,
     } = useForm<LoginFormValues>({
         resolver: zodResolver(loginFormSchema),
         defaultValues: {
@@ -43,8 +40,6 @@ const LoginPage: NextPage = () => {
             password: '',
         },
     });
-
-    const emailValue = watch('email');
 
     // 既にログイン済みの場合はリダイレクト
     useEffect(() => {
@@ -111,19 +106,12 @@ const LoginPage: NextPage = () => {
 
         setIsLoading(true);
 
-        // Electronアプリ用：完全なURLを構築
-        const getRedirectUrl = () => {
-            if (typeof window === 'undefined') return '/sso-callback';
-            const origin = window.location.origin;
-            return `${origin}/sso-callback`;
-        };
-
         await toast.promise(
             new Promise<string>(async (reject) => {
                 try {
                     await signIn.authenticateWithRedirect({
                         strategy: provider,
-                        redirectUrl: getRedirectUrl(), // 完全なURLを指定
+                        redirectUrl: '/sso-callback', // SSO用のコールバックページ
                         redirectUrlComplete: '/', // 認証完了後のリダイレクト先
                     });
                 } catch (err: any) {
@@ -166,29 +154,15 @@ const LoginPage: NextPage = () => {
                     <form onSubmit={handleSubmit(handleEmailLogin)} className="space-y-4">
                         <div className="space-y-2">
                             <Label htmlFor="email">メールアドレス</Label>
-                            <div className="relative">
-                                <Input
-                                    id="email"
-                                    type="email"
-                                    autoFocus
-                                    placeholder="your@email.com"
-                                    {...register('email')}
-                                    disabled={isLoading}
-                                    className={errors.email ? 'border-red-500 pr-10' : 'pr-10'}
-                                />
-                                {emailValue && (
-                                    <Button
-                                        type="button"
-                                        variant="ghost"
-                                        disabled={isLoading}
-                                        size="icon"
-                                        className="absolute right-2 top-1/2 -translate-y-1/2 h-6 w-6 cursor-pointer"
-                                        onClick={() => setValue('email', '')}
-                                    >
-                                        <X className="w-4 h-4 text-gray-500" />
-                                    </Button>
-                                )}
-                            </div>
+                            <Input
+                                id="email"
+                                type="email"
+                                autoFocus
+                                placeholder="your@email.com"
+                                {...register('email')}
+                                disabled={isLoading}
+                                className={errors.email ? 'border-red-500 ' : ''}
+                            />
                             {errors.email && (
                                 <p className="text-sm text-red-500">{errors.email.message}</p>
                             )}
@@ -212,7 +186,7 @@ const LoginPage: NextPage = () => {
                                     variant="ghost"
                                     disabled={isLoading}
                                     size="icon"
-                                    className="absolute right-2 top-1/2 -translate-y-1/2 h-6 w-6 cursor-pointer"
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 cursor-pointer"
                                     onClick={() => setShowPassword(!showPassword)}
                                 >
                                     {showPassword ? (
@@ -229,7 +203,7 @@ const LoginPage: NextPage = () => {
 
                         <div className="text-right">
                             <Link
-                                href="/forget-password"
+                                href="/forgot-password"
                                 className="text-sm text-blue-600 hover:text-blue-500"
                             >
                                 パスワードを忘れた方
@@ -270,7 +244,7 @@ const LoginPage: NextPage = () => {
                             onClick={() => handleSocialLogin('oauth_slack')}
                             disabled={isLoading}
                         >
-                            <SlackIconSVG className="mr-2" />
+                            <Slack className="mr-2 h-4 w-4" />
                             Slackでログイン
                         </Button>
                     </div>
@@ -280,7 +254,7 @@ const LoginPage: NextPage = () => {
                     <div className="text-center text-sm">
                         <span className="text-gray-600">アカウントをお持ちでない方は </span>
                         <Link
-                            href="/signup"
+                            href="/sign-up"
                             className="text-blue-600 hover:text-blue-500 font-medium cursor-pointer"
                         >
                             新規登録

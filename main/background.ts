@@ -1,407 +1,369 @@
 import path from 'path';
-import { app, ipcMain, Tray, Menu, nativeImage, BrowserWindow } from 'electron';
+import fs from 'fs';
+import { app, ipcMain } from 'electron';
 import serve from 'electron-serve';
-import Store from 'electron-store';
 import { createWindow } from './helpers';
-import { getPCInfo, PCInfo } from './pc-info';
-import { writeToSpreadsheet, SpreadsheetConfig, PCInfoRow } from './google-sheets';
+import { serve as serveHono } from '@hono/node-server';
+
+// 設定ファイルを読み込む（サーバー起動前に実行）
+// 重要: serverAppをインポートする前にloadConfig()を実行する必要がある
+// なぜなら、serverAppが読み込まれる時点で環境変数が設定されている必要があるため
+console.log('[Main] 設定ファイルの読み込みを開始（サーバーインポート前）...');
+// loadConfig()は後で定義されるが、ここで呼び出す必要がある
+// そのため、先にloadConfig関数を定義してから呼び出す
 
 const isProd = process.env.NODE_ENV === 'production';
 
-if (isProd) {
-    serve({ directory: 'app' });
-} else {
-    app.setPath('userData', `${app.getPath('userData')} (development)`);
+// 設定ファイルを読み込む
+interface AppConfig {
+    clerkPublishableKey?: string;
+    clerkSecretKey?: string;
+    [key: string]: any;
 }
 
-// 設定ストア（最後にPC情報を取得した日時を保存）
-const store = new Store<{ lastPcInfoFetch: number; autoLaunch: boolean; setupCompleted: boolean }>({
-    name: 'pc-info-schedule',
-    defaults: {
-        lastPcInfoFetch: 0,
-        autoLaunch: true, // デフォルトで自動起動を有効にする
-        setupCompleted: true, // セットアップ完了フラグ（デフォルトで完了として扱う）
-    },
-});
+let appConfig: AppConfig = {};
 
-// 1週間（ミリ秒）
-const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
-
-// グローバル変数
-let mainWindow: BrowserWindow | null = null;
-let tray: Tray | null = null;
-let appIsQuiting = false;
-
-/**
- * PC情報をバックグラウンドで取得する関数
- */
-async function fetchPCInfoInBackground(): Promise<void> {
+const loadConfig = () => {
     try {
-        console.log('[Background] PC情報を取得中...');
-        const pcInfo = await getPCInfo();
-        console.log('[Background] PC情報を取得しました:', {
-            hostname: pcInfo.hostname,
-            timestamp: pcInfo.timestamp,
-        });
+        // 設定ファイルのパスを決定
+        // 開発環境: プロジェクトルート
+        // 本番環境: app.getAppPath()を使用（resources/app/config.json を参照）
+        // または、実行ファイルと同じディレクトリに配置する場合は app.getPath('exe') のディレクトリを使用
+        let configPath: string;
 
-        // 最後に取得した日時を更新
-        store.set('lastPcInfoFetch', Date.now());
-
-        // 必要に応じて、ここでスプレッドシートに書き込むなどの処理を追加できます
-        // 例: await writeToSpreadsheet(config, pcInfo);
-    } catch (error: any) {
-        console.error('[Background] PC情報の取得に失敗:', error);
-    }
-}
-
-/**
- * 定期取得のスケジュールを設定
- */
-function schedulePCInfoFetch(): void {
-    const lastFetch = store.get('lastPcInfoFetch', 0);
-    const now = Date.now();
-    const timeSinceLastFetch = now - lastFetch;
-
-    // 初回起動時、または1週間以上経過している場合は即座に取得
-    if (lastFetch === 0 || timeSinceLastFetch >= ONE_WEEK_MS) {
-        console.log('[Background] 初回起動または1週間経過のため、PC情報を取得します');
-        fetchPCInfoInBackground();
-    } else {
-        // 次回の取得までの残り時間を計算
-        const timeUntilNextFetch = ONE_WEEK_MS - timeSinceLastFetch;
-        const daysUntilNextFetch = Math.ceil(timeUntilNextFetch / (24 * 60 * 60 * 1000));
-        console.log(`[Background] 次回のPC情報取得まで ${daysUntilNextFetch} 日`);
-    }
-
-    // 1週間ごとに定期取得
-    setInterval(() => {
-        console.log('[Background] 定期取得: PC情報を取得します');
-        fetchPCInfoInBackground();
-    }, ONE_WEEK_MS);
-}
-
-/**
- * システムトレイアイコンを作成
- */
-function createTray(): void {
-    // アイコン画像のパス（デフォルトのアイコンを使用）
-    const iconPath = path.join(__dirname, '../resources/icon.png');
-
-    // アイコンが存在しない場合は、空の画像を使用
-    let trayIcon: Electron.NativeImage;
-    try {
-        trayIcon = nativeImage.createFromPath(iconPath);
-        if (trayIcon.isEmpty()) {
-            // アイコンが読み込めない場合は、デフォルトのアイコンを作成
-            trayIcon = nativeImage.createEmpty();
-        }
-    } catch {
-        trayIcon = nativeImage.createEmpty();
-    }
-
-    // システムトレイアイコンを作成
-    tray = new Tray(trayIcon);
-    tray.setToolTip('VITPC');
-
-    // コンテキストメニューを作成
-    const contextMenu = Menu.buildFromTemplate([
-        {
-            label: 'ウィンドウを表示',
-            click: () => {
-                if (mainWindow) {
-                    mainWindow.show();
-                    mainWindow.focus();
-                }
-            },
-        },
-        {
-            label: 'ウィンドウを隠す',
-            click: () => {
-                if (mainWindow) {
-                    mainWindow.hide();
-                }
-            },
-        },
-        { type: 'separator' },
-        {
-            label: 'PC情報を更新',
-            click: async () => {
-                await fetchPCInfoInBackground();
-            },
-        },
-        { type: 'separator' },
-        {
-            label: '終了',
-            click: () => {
-                app.quit();
-            },
-        },
-    ]);
-
-    tray.setContextMenu(contextMenu);
-
-    // トレイアイコンをクリックしたときの動作
-    tray.on('click', () => {
-        if (mainWindow) {
-            if (mainWindow.isVisible()) {
-                mainWindow.hide();
-            } else {
-                mainWindow.show();
-                mainWindow.focus();
+        if (isProd) {
+            // 本番環境: app.getAppPath()を使用（resources/app/config.json）
+            // 注意: app.getPath('exe')はapp.whenReady()前に呼び出すとエラーになる可能性があるため使用しない
+            try {
+                configPath = path.join(app.getAppPath(), 'config.json');
+                console.log(`[Config] 本番環境: config.jsonのパスを決定しました: ${configPath}`);
+            } catch (error) {
+                // app.getAppPath()が失敗した場合、プロジェクトルートを試す
+                console.warn('[Config] app.getAppPath() failed, trying project root');
+                configPath = path.join(__dirname, '../config.json');
             }
+        } else {
+            // 開発環境: プロジェクトルート
+            configPath = path.join(__dirname, '../config.json');
+            console.log(`[Config] 開発環境: config.jsonのパスを決定しました: ${configPath}`);
         }
+
+        if (fs.existsSync(configPath)) {
+            const configFileContent = fs.readFileSync(configPath, { encoding: 'utf8' });
+            const parsedConfig = JSON.parse(configFileContent);
+
+            // キー名のマッピング（環境変数名とconfig.jsonのキー名の両方に対応）
+            // config.jsonには CLERK_SECRET_KEY と NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY の形式で記述されている
+            appConfig = {
+                clerkPublishableKey:
+                    parsedConfig.clerkPublishableKey ||
+                    parsedConfig.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
+                clerkSecretKey: parsedConfig.clerkSecretKey || parsedConfig.CLERK_SECRET_KEY,
+                ...parsedConfig, // その他の設定も保持
+            };
+
+            console.log(`[Config] Loaded configuration from ${configPath}`);
+            console.log(`[Config] Raw config keys:`, Object.keys(parsedConfig));
+            console.log(
+                `[Config] clerkPublishableKey: ${
+                    appConfig.clerkPublishableKey ? '設定済み' : '未設定'
+                }`
+            );
+            console.log(
+                `[Config] clerkSecretKey: ${
+                    appConfig.clerkSecretKey
+                        ? '設定済み (' + appConfig.clerkSecretKey.substring(0, 10) + '...)'
+                        : '未設定'
+                }`
+            );
+
+            // デバッグ: 元のconfig.jsonのキーを確認
+            if (parsedConfig.CLERK_SECRET_KEY) {
+                console.log(`[Config] ✓ config.jsonにCLERK_SECRET_KEYが見つかりました`);
+            } else if (parsedConfig.clerkSecretKey) {
+                console.log(`[Config] ✓ config.jsonにclerkSecretKeyが見つかりました`);
+            } else {
+                console.warn(
+                    `[Config] ⚠️ config.jsonにCLERK_SECRET_KEYもclerkSecretKeyも見つかりませんでした`
+                );
+            }
+        } else {
+            console.warn(`[Config] Config file not found at ${configPath}, using defaults`);
+        }
+    } catch (error) {
+        console.error('[Config Error] Failed to read config.json:', error);
+        // フォールバック: 環境変数から読み込む
+        appConfig = {
+            clerkPublishableKey: process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
+            clerkSecretKey: process.env.CLERK_SECRET_KEY,
+        };
+    }
+
+    // 環境変数で設定を上書き（優先度: 環境変数 > config.json）
+    if (process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY) {
+        appConfig.clerkPublishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+    }
+    if (process.env.CLERK_SECRET_KEY) {
+        appConfig.clerkSecretKey = process.env.CLERK_SECRET_KEY;
+    }
+
+    // 環境変数に設定（サーバー側で使用）
+    // 重要: この設定はサーバー起動前に実行される必要がある
+    // config.jsonから読み込んだ値をprocess.envに注入する
+    if (appConfig.clerkSecretKey) {
+        process.env.CLERK_SECRET_KEY = appConfig.clerkSecretKey;
+        console.log('[Config] ✓ CLERK_SECRET_KEYを環境変数に設定しました');
+        console.log(`[Config] CLERK_SECRET_KEY値: ${appConfig.clerkSecretKey.substring(0, 10)}...`);
+        console.log(
+            `[Config] process.env.CLERK_SECRET_KEYが設定されたか確認: ${
+                process.env.CLERK_SECRET_KEY ? '✓ 設定済み' : '✗ 未設定'
+            }`
+        );
+    } else {
+        console.error('[Config] ⚠️ CLERK_SECRET_KEYが設定されていません！');
+        console.error('[Config] appConfig.clerkSecretKey:', appConfig.clerkSecretKey);
+        console.error('[Config] 環境変数CLERK_SECRET_KEY:', process.env.CLERK_SECRET_KEY);
+        console.error('[Config] config.jsonの内容を確認してください:');
+        console.error('[Config] - CLERK_SECRET_KEY または clerkSecretKey キーが存在するか');
+        console.error('[Config] - 値が正しく設定されているか');
+    }
+
+    if (appConfig.clerkPublishableKey) {
+        process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY = appConfig.clerkPublishableKey;
+        console.log('[Config] NEXT_PUBLIC_CLERK_PUBLISHABLE_KEYを環境変数に設定しました');
+    } else {
+        console.warn('[Config] ⚠️ NEXT_PUBLIC_CLERK_PUBLISHABLE_KEYが設定されていません');
+    }
+};
+
+// 設定を取得する関数
+export const getConfig = (): AppConfig => appConfig;
+
+// メインサーバーを起動（本番環境でも動作）
+// このサーバーはElectronアプリのmainプロセスで常に動作し、
+// 本番環境でもNext.jsサーバーが起動しないため、ここでAPIサーバーとして機能する
+const SERVER_PORT = 3001;
+
+// 利用可能なポートを見つける関数
+const findAvailablePort = async (startPort: number): Promise<number> => {
+    const net = await import('net');
+    return new Promise((resolve, reject) => {
+        const server = net.createServer();
+        server.listen(startPort, () => {
+            const port = (server.address() as net.AddressInfo)?.port;
+            server.close(() => {
+                resolve(port || startPort);
+            });
+        });
+        server.on('error', (err: NodeJS.ErrnoException) => {
+            if (err.code === 'EADDRINUSE') {
+                // ポートが使用されている場合、次のポートを試す
+                findAvailablePort(startPort + 1)
+                    .then(resolve)
+                    .catch(reject);
+            } else {
+                reject(err);
+            }
+        });
     });
-}
+};
 
-/**
- * OS起動時に自動起動する設定
- */
-function setupAutoLaunch(): void {
-    const autoLaunch = store.get('autoLaunch', true);
+// 設定ファイルを読み込む（サーバー起動前に実行）
+console.log('[Main] 設定ファイルの読み込みを開始...');
+loadConfig();
+console.log('[Main] 設定ファイルの読み込み完了');
 
-    // 自動起動の設定
-    app.setLoginItemSettings({
-        openAtLogin: autoLaunch,
-        openAsHidden: true, // ウィンドウを表示せずに起動
-        name: 'VITPC',
-    });
-
-    console.log(`[AutoLaunch] 自動起動設定: ${autoLaunch ? '有効' : '無効'}`);
-}
-
-/**
- * 自動起動設定を変更するIPCハンドラー
- */
-ipcMain.handle('set-auto-launch', (event, enabled: boolean) => {
-    store.set('autoLaunch', enabled);
-    app.setLoginItemSettings({
-        openAtLogin: enabled,
-        openAsHidden: true,
-        name: 'VITPC',
-    });
-    return { success: true };
-});
-
-/**
- * 自動起動設定を取得するIPCハンドラー
- */
-ipcMain.handle('get-auto-launch', () => {
-    return { enabled: store.get('autoLaunch', true) };
-});
-
-/**
- * セットアップ完了フラグを設定するIPCハンドラー
- */
-ipcMain.handle('complete-setup', () => {
-    store.set('setupCompleted', true);
-    return { success: true };
-});
-
-/**
- * セットアップ完了フラグを取得するIPCハンドラー
- */
-ipcMain.handle('get-setup-status', () => {
-    return { completed: store.get('setupCompleted', false) };
-});
+// 環境変数が設定されているか確認
+console.log('[Main] 環境変数チェック:');
+console.log(
+    '[Main] CLERK_SECRET_KEY:',
+    process.env.CLERK_SECRET_KEY
+        ? '設定済み (' + process.env.CLERK_SECRET_KEY.substring(0, 10) + '...)'
+        : '❌ 未設定'
+);
+console.log(
+    '[Main] NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:',
+    process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ? '設定済み' : '❌ 未設定'
+);
 
 (async () => {
-    // 単一インスタンスロック（既に実行中のアプリがある場合は既存のウィンドウを表示）
-    const gotTheLock = app.requestSingleInstanceLock();
+    // サーバーアプリを動的にインポート（loadConfig()実行後）
+    const { default: serverApp } = await import('./server');
 
-    if (!gotTheLock) {
-        // 既に別のインスタンスが実行中
-        app.quit();
-        return;
+    // 利用可能なポートを見つける
+    let actualPort = SERVER_PORT;
+    try {
+        actualPort = await findAvailablePort(SERVER_PORT);
+        if (actualPort !== SERVER_PORT) {
+            console.warn(
+                `[Main Server] ポート${SERVER_PORT}は使用中のため、ポート${actualPort}を使用します`
+            );
+        }
+    } catch (error) {
+        console.error('[Main Server] 利用可能なポートを見つけられませんでした:', error);
+        // エラーが発生した場合でも、元のポートで試す
     }
 
-    // 2つ目のインスタンスが起動されたときに既存のウィンドウを表示
-    app.on('second-instance', () => {
-        if (mainWindow) {
-            if (mainWindow.isMinimized()) mainWindow.restore();
-            mainWindow.show();
-            mainWindow.focus();
-        }
+    // サーバー起動前に環境変数が設定されているか確認
+    console.log('[Main Server] ========================================');
+    console.log('[Main Server] サーバー起動前の環境変数チェック:');
+    console.log(
+        `[Main Server] CLERK_SECRET_KEY: ${
+            process.env.CLERK_SECRET_KEY
+                ? '設定済み (' + process.env.CLERK_SECRET_KEY.substring(0, 10) + '...)'
+                : '❌ 未設定'
+        }`
+    );
+    console.log(
+        `[Main Server] NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${
+            process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ? '設定済み' : '❌ 未設定'
+        }`
+    );
+    console.log('[Main Server] appConfig:', {
+        clerkSecretKey: appConfig.clerkSecretKey
+            ? appConfig.clerkSecretKey.substring(0, 10) + '...'
+            : '未設定',
+        clerkPublishableKey: appConfig.clerkPublishableKey ? '設定済み' : '未設定',
     });
+    console.log('[Main Server] ========================================');
+
+    // CLERK_SECRET_KEYが設定されていない場合は警告
+    if (!process.env.CLERK_SECRET_KEY) {
+        console.error('[Main Server] ⚠️ 警告: CLERK_SECRET_KEYが設定されていません！');
+        console.error('[Main Server] config.jsonファイルを確認してください。');
+        console.error('[Main Server] 開発環境: プロジェクトルートのconfig.json');
+        console.error('[Main Server] 本番環境: 実行ファイルと同じディレクトリのconfig.json');
+    }
+
+    // サーバーを起動
+    try {
+        serveHono({
+            fetch: serverApp.fetch,
+            port: actualPort,
+        });
+        console.log(`[Main Server] サーバーを起動しました: http://localhost:${actualPort}`);
+    } catch (error: any) {
+        if (error.code === 'EADDRINUSE') {
+            console.error(
+                `[Main Server] ポート${actualPort}は既に使用されています。アプリケーションを再起動してください。`
+            );
+        } else {
+            console.error('[Main Server] サーバーの起動に失敗しました:', error);
+        }
+    }
+
+    // 本番環境でもHTTPサーバーを使用（Clerkがapp://プロトコルを認識できないため）
+    // electron-serveを使用して静的ファイルを配信
+    if (isProd) {
+        serve({ directory: 'app' });
+    } else {
+        app.setPath('userData', `${app.getPath('userData')} (development)`);
+    }
 
     await app.whenReady();
 
-    // 自動起動の設定
-    setupAutoLaunch();
-
-    // macOSの場合、Dockアイコンを非表示にする
-    if (process.platform === 'darwin') {
-        app.dock.hide();
-    }
-
-    // コマンドライン引数から自動起動かどうかを判定
-    // --hidden フラグがある場合は、ウィンドウを表示せずにバックグラウンドで実行
-    const isAutoLaunch =
-        process.argv.includes('--hidden') || process.argv.includes('--open-as-hidden');
-    
-    // セットアップが完了しているかチェック
-    const setupCompleted = store.get('setupCompleted', false);
-    
-    // 初回起動時（セットアップ未完了）は、自動起動フラグがあってもウィンドウを表示
-    const shouldShowWindow = !isAutoLaunch || !setupCompleted;
-
-    try {
-        mainWindow = createWindow('main', {
-            width: 1000,
-            height: 600,
-            webPreferences: {
-                preload: path.join(__dirname, 'preload.js'),
-            },
-            show: shouldShowWindow, // 初回起動時はウィンドウを表示
-        });
-        
-        // ページが読み込まれたらウィンドウを確実に表示（初回起動時）
-        if (shouldShowWindow) {
-            mainWindow.webContents.once('did-finish-load', () => {
-                if (mainWindow && !mainWindow.isVisible()) {
-                    mainWindow.show();
-                    mainWindow.focus();
-                }
-            });
-        }
-    } catch (error) {
-        // ウィンドウ作成に失敗した場合はアプリを終了
-        app.quit();
-        return;
-    }
-
-    // ウィンドウを閉じたときにアプリを終了させない（バックグラウンドで実行）
-    mainWindow.on('close', (event) => {
-        if (!appIsQuiting) {
-            event.preventDefault();
-            mainWindow?.hide();
-        }
+    const mainWindow = createWindow('main', {
+        width: 1000,
+        height: 600,
+        webPreferences: {
+            preload: path.join(__dirname, 'preload.js'),
+        },
     });
 
-    // Content Security Policyの設定（本番環境のみ）
     if (isProd) {
-        mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
-            callback({
-                responseHeaders: {
-                    ...details.responseHeaders,
-                    'Content-Security-Policy': [
-                        "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://*.clerk.accounts.dev https://*.clerk.com;",
-                    ],
-                },
+        // 本番環境でもHTTPサーバーを使用（Clerkがapp://プロトコルを認識できないため）
+        // 静的ファイルを配信するためのHTTPサーバーを起動
+        // 固定ポート3002を使用（Clerkダッシュボードに登録する必要がある）
+        const http = await import('http');
+        const fs = await import('fs');
+        const url = await import('url');
+
+        const staticDir = path.join(__dirname, '../app');
+        const STATIC_PORT = 3002; // 固定ポート（Clerkダッシュボードに登録する必要がある）
+
+        const httpServer = http.createServer((req, res) => {
+            if (!req.url) {
+                res.writeHead(400);
+                res.end('Bad Request');
+                return;
+            }
+
+            const parsedUrl = url.parse(req.url);
+            let filePath = path.join(staticDir, parsedUrl.pathname || '/');
+
+            // ディレクトリの場合はindex.htmlを探す
+            if (fs.existsSync(filePath) && fs.statSync(filePath).isDirectory()) {
+                const indexPath = path.join(filePath, 'index.html');
+                if (fs.existsSync(indexPath)) {
+                    filePath = indexPath;
+                } else {
+                    // ルートディレクトリの場合は/loginにリダイレクト
+                    if (parsedUrl.pathname === '/') {
+                        res.writeHead(302, { Location: '/login' });
+                        res.end();
+                        return;
+                    }
+                }
+            }
+
+            // ファイルが存在しない場合、拡張子がない場合は.htmlを追加
+            if (!fs.existsSync(filePath) && !path.extname(filePath)) {
+                const htmlPath = filePath + '.html';
+                if (fs.existsSync(htmlPath)) {
+                    filePath = htmlPath;
+                }
+            }
+
+            // ファイルを読み込んで返す
+            fs.readFile(filePath, (err, data) => {
+                if (err) {
+                    res.writeHead(404);
+                    res.end('Not Found');
+                    return;
+                }
+
+                const ext = path.extname(filePath);
+                const contentType =
+                    ext === '.html'
+                        ? 'text/html'
+                        : ext === '.js'
+                        ? 'application/javascript'
+                        : ext === '.css'
+                        ? 'text/css'
+                        : ext === '.json'
+                        ? 'application/json'
+                        : 'application/octet-stream';
+
+                res.writeHead(200, { 'Content-Type': contentType });
+                res.end(data);
             });
         });
-        // セットアップが完了していない場合はセットアップページへ、完了している場合はログインページへ
-        const loadPageWithFallback = async (): Promise<void> => {
-            const urls = !setupCompleted 
-                ? ['app://./setup/', 'app://./login/']
-                : ['app://./login/'];
-            
-            for (const url of urls) {
-                try {
-                    await mainWindow!.loadURL(url);
-                    // ページが読み込まれたか確認（短い待機時間）
-                    await new Promise(resolve => setTimeout(resolve, 500));
-                    // 成功した場合はループを抜ける
-                    return;
-                } catch (error) {
-                    // 次のURLを試す
-                    continue;
-                }
-            }
-            
-            // すべて失敗した場合は、セットアップを完了としてマークしてログインページを再試行
-            if (!setupCompleted) {
-                store.set('setupCompleted', true);
-                try {
-                    await mainWindow!.loadURL('app://./login/');
-                } catch {
-                    // 最終的なフォールバック
-                    mainWindow!.loadURL('about:blank');
-                }
-            } else {
-                // 最終的なフォールバック
-                mainWindow!.loadURL('about:blank');
-            }
-        };
-        
-        await loadPageWithFallback();
+
+        httpServer.listen(STATIC_PORT, () => {
+            console.log(
+                `[HTTP Server] 静的ファイルサーバーを起動しました: http://localhost:${STATIC_PORT}`
+            );
+            console.log(
+                `[HTTP Server] ⚠️ Clerkダッシュボードに以下のオリジンを登録してください: http://localhost:${STATIC_PORT}`
+            );
+            mainWindow.loadURL(`http://localhost:${STATIC_PORT}/login`);
+        });
     } else {
         const port = process.argv[2];
-        // セットアップが完了していない場合はセットアップページへ、完了している場合はログインページへ
-        let loadSuccess = false;
-        if (!setupCompleted) {
-            try {
-                await mainWindow.loadURL(`http://localhost:${port}/setup`);
-                loadSuccess = true;
-            } catch (error) {
-                loadSuccess = false;
-            }
-        }
-        
-        if (!loadSuccess) {
-            try {
-                await mainWindow.loadURL(`http://localhost:${port}/login`);
-            } catch (fallbackError) {
-                // フォールバックも失敗した場合は空のページを表示
-                mainWindow.loadURL('about:blank');
-            }
-        }
+        await mainWindow.loadURL(`http://localhost:${port}/login`);
         mainWindow.webContents.openDevTools();
     }
-
-    // システムトレイアイコンを作成
-    createTray();
-
-    // バックグラウンドでPC情報を取得するスケジュールを設定
-    schedulePCInfoFetch();
 })();
 
-app.on('before-quit', () => {
-    appIsQuiting = true;
-});
-
 app.on('window-all-closed', () => {
-    // macOS以外では、すべてのウィンドウが閉じられてもアプリを終了させない
-    // システムトレイから終了できるようにする
-    if (process.platform !== 'darwin') {
-        // アプリを終了させない（バックグラウンドで実行）
-    }
-});
-
-// macOS用: アプリがアクティブになったときにウィンドウを表示
-app.on('activate', () => {
-    if (mainWindow) {
-        mainWindow.show();
-    }
+    app.quit();
 });
 
 ipcMain.on('message', async (event, arg) => {
     event.reply('message', `${arg} World!`);
 });
 
-// PC情報取得のIPCハンドラー
-ipcMain.handle('get-pc-info', async (): Promise<PCInfo> => {
-    try {
-        const pcInfo = await getPCInfo();
-        return pcInfo;
-    } catch (error: any) {
-        console.error('PC情報の取得に失敗:', error);
-        throw new Error(error.message || 'PC情報の取得に失敗しました');
-    }
+// 設定を取得するIPCハンドラー
+ipcMain.handle('get-config', () => {
+    return appConfig;
 });
-
-// スプレッドシートへの書き込みのIPCハンドラー
-ipcMain.handle(
-    'write-to-spreadsheet',
-    async (event, config: SpreadsheetConfig, pcInfo: PCInfoRow) => {
-        try {
-            const result = await writeToSpreadsheet(config, pcInfo);
-            return result;
-        } catch (error: any) {
-            console.error('スプレッドシートへの書き込みに失敗:', error);
-            return {
-                success: false,
-                message: error.message || 'スプレッドシートへの書き込みに失敗しました',
-            };
-        }
-    }
-);

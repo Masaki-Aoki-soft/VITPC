@@ -1,9 +1,16 @@
 import { IpcHandler } from '../main/preload'
 
+interface ElectronAPI {
+  getConfig: () => Promise<{
+    clerkPublishableKey?: string;
+    clerkSecretKey?: string;
+    [key: string]: any;
+  }>;
+}
+
 declare global {
   interface Window {
-    ipc: IpcHandler & {
-      invoke(channel: string, ...args: unknown[]): Promise<unknown>
-    }
+    ipc: IpcHandler;
+    electronAPI: ElectronAPI;
   }
 }

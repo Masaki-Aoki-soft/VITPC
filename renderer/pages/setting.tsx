@@ -3,7 +3,7 @@
 'use client';
 
 import { NextPage } from 'next';
-import { UserProfile } from '@clerk/nextjs';
+import { UserProfile } from '@clerk/clerk-react';
 import { Navbar } from '@/components/site-header';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
@@ -34,4 +34,9 @@ const SettingPage: NextPage = () => {
 };
 
 export default SettingPage;
+
+
+
+
+
 
