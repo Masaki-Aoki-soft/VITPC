@@ -375,3 +375,4 @@ ipcMain.on('message', async (event, arg) => {
 ipcMain.handle('get-config', () => {
     return appConfig;
 });
+

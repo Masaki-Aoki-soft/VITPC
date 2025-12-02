@@ -5,6 +5,7 @@ import { getPCInfo } from '../../pc-info';
 import { db } from '../db';
 import { pcInfoTable } from '../db/schema';
 import { randomBytes } from 'crypto';
+import { eq, desc } from 'drizzle-orm';
 
 export const pcInfoRoute = new Hono();
 
@@ -43,15 +44,15 @@ pcInfoRoute.post('/', async (c) => {
         console.log('[PC Info API] PC情報を取得中...');
         const pcInfo = await getPCInfo();
 
-        // データベースに保存するためのIDを生成（userId + hostname + timestampのハッシュ）
-        const id = randomBytes(16).toString('hex');
-
         console.log('[PC Info API] データベースに保存中...');
         console.log('[PC Info API] 保存データ:', {
-            id,
             userId,
             hostname: pcInfo.hostname,
         });
+
+        // 変数を外側のスコープで定義
+        let id: string;
+        let isUpdate = false;
 
         // データベースに保存
         try {
@@ -72,9 +73,31 @@ pcInfoRoute.post('/', async (c) => {
                 console.warn('[PC Info API] テーブル確認中にエラーが発生しましたが、続行します:', migrateError?.message);
             }
             
-            // データベースに保存
+            // user_idで既存レコードを検索（最新のもの）
+            console.log('[PC Info API] user_idで既存レコードを検索中...');
+            const existingRecords = await db
+                .select()
+                .from(pcInfoTable)
+                .where(eq(pcInfoTable.userId, userId))
+                .orderBy(desc(pcInfoTable.updatedAt))
+                .limit(1);
+
+            const existingRecord = existingRecords[0];
+
+            if (existingRecord) {
+                // 既存レコードがある場合は、そのIDを使って更新
+                id = existingRecord.id;
+                isUpdate = true;
+                console.log('[PC Info API] 既存レコードが見つかりました。更新します。ID:', id);
+            } else {
+                // 既存レコードがない場合は、新規IDを生成
+                id = randomBytes(16).toString('hex');
+                console.log('[PC Info API] 既存レコードが見つかりませんでした。新規作成します。ID:', id);
+            }
+
+            // データベースに保存（更新または挿入）
             try {
-                await db.insert(pcInfoTable).values({
+                const saveData = {
                     id,
                     userId,
                     fullName: fullName || null,
@@ -92,9 +115,27 @@ pcInfoRoute.post('/', async (c) => {
                     gpu: pcInfo.gpu,
                     storage: pcInfo.storage,
                     timestamp: new Date(pcInfo.timestamp),
-                    createdAt: new Date(),
                     updatedAt: new Date(),
-                });
+                };
+
+                if (isUpdate) {
+                    // 既存レコードを更新（createdAtは保持、updatedAtのみ更新）
+                    await db
+                        .update(pcInfoTable)
+                        .set({
+                            ...saveData,
+                            createdAt: existingRecord.createdAt, // createdAtは保持
+                        })
+                        .where(eq(pcInfoTable.id, id));
+                    console.log('[PC Info API] ✓ 既存レコードを更新しました');
+                } else {
+                    // 新規レコードを挿入
+                    await db.insert(pcInfoTable).values({
+                        ...saveData,
+                        createdAt: new Date(),
+                    });
+                    console.log('[PC Info API] ✓ 新規レコードを作成しました');
+                }
             } catch (insertError: any) {
                 // エラーの詳細をログに出力
                 console.error('[PC Info API] INSERTエラー発生:');
@@ -130,9 +171,20 @@ pcInfoRoute.post('/', async (c) => {
                         }
                         
                         console.log('[PC Info API] ✓ テーブル作成完了、再試行します...');
-                        // 再試行
-                        await db.insert(pcInfoTable).values({
-                            id,
+                        // 再試行（既存レコードを検索し直す）
+                        const retryExistingRecords = await db
+                            .select()
+                            .from(pcInfoTable)
+                            .where(eq(pcInfoTable.userId, userId))
+                            .orderBy(desc(pcInfoTable.updatedAt))
+                            .limit(1);
+                        
+                        const retryExistingRecord = retryExistingRecords[0];
+                        const retryId = retryExistingRecord ? retryExistingRecord.id : randomBytes(16).toString('hex');
+                        const isRetryUpdate = !!retryExistingRecord;
+                        
+                        const retrySaveData = {
+                            id: retryId,
                             userId,
                             fullName: fullName || null,
                             hostname: pcInfo.hostname,
@@ -149,9 +201,23 @@ pcInfoRoute.post('/', async (c) => {
                             gpu: pcInfo.gpu,
                             storage: pcInfo.storage,
                             timestamp: new Date(pcInfo.timestamp),
-                            createdAt: new Date(),
                             updatedAt: new Date(),
-                        });
+                        };
+                        
+                        if (isRetryUpdate) {
+                            await db
+                                .update(pcInfoTable)
+                                .set({
+                                    ...retrySaveData,
+                                    createdAt: retryExistingRecord.createdAt,
+                                })
+                                .where(eq(pcInfoTable.id, retryId));
+                        } else {
+                            await db.insert(pcInfoTable).values({
+                                ...retrySaveData,
+                                createdAt: new Date(),
+                            });
+                        }
                         
                         console.log('[PC Info API] ✓ 再試行が成功しました');
                     } catch (migrateError: any) {
@@ -214,7 +280,7 @@ pcInfoRoute.post('/', async (c) => {
         }
 
         return c.json({
-            message: 'PC情報を保存しました',
+            message: isUpdate ? 'PC情報を更新しました' : 'PC情報を保存しました',
             data: {
                 id,
                 ...pcInfo,
