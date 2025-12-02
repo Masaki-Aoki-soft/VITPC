@@ -134,6 +134,14 @@ const loadConfig = () => {
     } else {
         console.warn('[Config] ⚠️ NEXT_PUBLIC_CLERK_PUBLISHABLE_KEYが設定されていません');
     }
+
+    // DATABASE_URLを環境変数に設定
+    if (appConfig.DATABASE_URL) {
+        process.env.DATABASE_URL = appConfig.DATABASE_URL;
+        console.log('[Config] ✓ DATABASE_URLを環境変数に設定しました');
+    } else {
+        console.warn('[Config] ⚠️ DATABASE_URLが設定されていません');
+    }
 };
 
 // 設定を取得する関数

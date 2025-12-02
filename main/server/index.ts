@@ -122,5 +122,26 @@ console.log('[Hono App] PC情報APIミドルウェアを設定しました（GET
 import { pcInfoRoute } from './route/pc-info';
 app.route('/api/pc-info', pcInfoRoute);
 
+// サーバー起動時にデータベーステーブルを作成（存在しない場合）
+(async () => {
+    try {
+        console.log('[Hono App] データベーステーブルの確認を開始...');
+        const { createTableIfNotExists } = await import('./db/migrate');
+        const result = await createTableIfNotExists();
+        if (result.success) {
+            console.log(
+                '[Hono App] ✓',
+                result.message || 'データベーステーブルの確認が完了しました'
+            );
+        } else {
+            console.error('[Hono App] ✗ データベーステーブルの確認に失敗:', result.error);
+        }
+    } catch (error: any) {
+        console.error('[Hono App] ✗ データベーステーブルの確認中にエラーが発生しました:', error);
+        console.error('[Hono App] エラーメッセージ:', error?.message);
+        // エラーが発生してもサーバーは起動し続ける（テーブルが既に存在する場合など）
+    }
+})();
+
 export type AppType = typeof app;
 export default app;
