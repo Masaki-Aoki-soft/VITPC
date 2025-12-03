@@ -1,1 +1,0 @@
-ALTER TABLE "pc_info" ADD COLUMN "full_name" text;

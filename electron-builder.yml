@@ -1,23 +1,40 @@
-appId: com.example.nextron
-productName: My Nextron App
-copyright: Copyright © 2018 Yoshihide Shiono
+appId: com.vitlab.vitpc
+productName: VITPC
+copyright: Copyright © 2024 Masaki Aoki
 directories:
-  output: dist
-  buildResources: resources
+    output: dist
+    buildResources: resources
 files:
   - from: .
     filter:
       - package.json
       - app
+      - config.json
 publish: null
-nsis:
-  oneClick: false
-  allowToChangeInstallationDirectory: true
-  allowElevation: true
-  runAfterFinish: true
-  deleteAppDataOnUninstall: true
+
+# Windowsインストーラー設定（NSIS）
 win:
   target:
     - target: nsis
       arch:
         - x64
+        - ia32
+  icon: resources/icon.ico
+
+# NSISインストーラー設定
+nsis:
+  # インストーラーの種類（oneClick: false でセットアップウィザードを表示）
+  oneClick: false
+  
+  # インストール先の選択を許可
+  allowToChangeInstallationDirectory: true
+  
+  # セットアップウィザードの言語
+  language: 1041 # 日本語
+  
+  # ショートカットの作成
+  createDesktopShortcut: always
+  createStartMenuShortcut: true
+  
+  # インストーラーのファイル名
+  artifactName: "${productName}-Setup-${version}.${ext}"
