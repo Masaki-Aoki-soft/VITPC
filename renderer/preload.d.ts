@@ -6,6 +6,7 @@ interface ElectronAPI {
     clerkSecretKey?: string;
     [key: string]: any;
   }>;
+  saveLastUser: (userId: string, fullName?: string) => Promise<void>;
 }
 
 declare global {

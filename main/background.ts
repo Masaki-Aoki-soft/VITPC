@@ -1,9 +1,10 @@
 import path from 'path';
 import fs from 'fs';
-import { app, ipcMain } from 'electron';
+import { app, ipcMain, powerMonitor } from 'electron';
 import serve from 'electron-serve';
 import { createWindow } from './helpers';
 import { serve as serveHono } from '@hono/node-server';
+import Store from 'electron-store';
 
 // 設定ファイルを読み込む（サーバー起動前に実行）
 // 重要: serverAppをインポートする前にloadConfig()を実行する必要がある
@@ -270,12 +271,50 @@ console.log(
 
     await app.whenReady();
 
+    // 自動保存スケジューラーを初期化
+    initAutoSaveScheduler();
+
     const mainWindow = createWindow('main', {
         width: 1000,
         height: 600,
+        show: false, // 初期状態では非表示（バックグラウンド起動）
         webPreferences: {
             preload: path.join(__dirname, 'preload.js'),
         },
+    });
+
+    // ウィンドウが準備できたら最小化状態で表示（バックグラウンド起動）
+    mainWindow.once('ready-to-show', () => {
+        // バックグラウンドで起動（最小化状態）
+        mainWindow.minimize();
+        // 最小化してもshow()を呼び出す必要がある
+        if (!mainWindow.isVisible()) {
+            mainWindow.show();
+        }
+        console.log('[Main] アプリをバックグラウンド（最小化状態）で起動しました');
+    });
+
+    // OSのロック解除を検知してウィンドウを表示
+    powerMonitor.on('unlock-screen', () => {
+        console.log('[Main] OSのロックが解除されました。アプリを表示します。');
+        if (mainWindow) {
+            // 最小化されている場合は復元
+            if (mainWindow.isMinimized()) {
+                mainWindow.restore();
+            }
+            // ウィンドウを前面に表示
+            mainWindow.show();
+            mainWindow.focus();
+        }
+    });
+
+    // ロック時は最小化（オプション）
+    powerMonitor.on('lock-screen', () => {
+        console.log('[Main] OSがロックされました。');
+        // 必要に応じて最小化する処理を追加
+        // if (mainWindow && !mainWindow.isMinimized()) {
+        //     mainWindow.minimize();
+        // }
     });
 
     if (isProd) {
@@ -375,4 +414,106 @@ ipcMain.on('message', async (event, arg) => {
 ipcMain.handle('get-config', () => {
     return appConfig;
 });
+
+// バックグラウンド自動保存用のストア
+interface AutoSaveStore {
+    lastAutoSaveDate?: string;
+    lastUserId?: string;
+    lastFullName?: string;
+}
+
+const autoSaveStore = new Store<AutoSaveStore>({
+    name: 'auto-save-config',
+});
+
+// 1週間（ミリ秒）
+const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+// チェック間隔（1日1回）
+const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * バックグラウンドでPC情報を自動保存
+ */
+async function autoSavePCInfo() {
+    try {
+        const lastSaveDate = autoSaveStore.get('lastAutoSaveDate');
+        const lastUserId = autoSaveStore.get('lastUserId');
+        const lastFullName = autoSaveStore.get('lastFullName');
+
+        // 最後に保存した日時を確認
+        const now = new Date();
+        const shouldSave = !lastSaveDate || 
+            (now.getTime() - new Date(lastSaveDate).getTime()) >= ONE_WEEK_MS;
+
+        if (!shouldSave) {
+            const daysUntilNext = Math.ceil(
+                (ONE_WEEK_MS - (now.getTime() - new Date(lastSaveDate).getTime())) / (24 * 60 * 60 * 1000)
+            );
+            console.log(`[Auto Save] 次回の自動保存まであと${daysUntilNext}日`);
+            return;
+        }
+
+        // ユーザーIDが保存されていない場合はスキップ
+        if (!lastUserId) {
+            console.log('[Auto Save] ユーザーIDが保存されていないため、自動保存をスキップします');
+            return;
+        }
+
+        console.log('[Auto Save] 1週間経過したため、PC情報を自動保存します...');
+
+        // PC情報を取得
+        const { getPCInfo } = await import('./pc-info');
+        const pcInfo = await getPCInfo();
+
+        // データベースに保存
+        const apiUrl = 'http://localhost:3001/api/pc-info';
+        const response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                ...pcInfo,
+                userId: lastUserId,
+                fullName: lastFullName || null,
+            }),
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'PC情報の保存に失敗しました');
+        }
+
+        // 保存日時を更新
+        autoSaveStore.set('lastAutoSaveDate', now.toISOString());
+        console.log('[Auto Save] ✓ PC情報の自動保存が完了しました');
+    } catch (error: any) {
+        console.error('[Auto Save] ✗ PC情報の自動保存に失敗しました:', error);
+        // エラーが発生してもアプリは継続動作
+    }
+}
+
+// 最後にログインしたユーザー情報を保存するIPCハンドラー
+ipcMain.handle('save-last-user', (_event, userId: string, fullName?: string) => {
+    autoSaveStore.set('lastUserId', userId);
+    if (fullName) {
+        autoSaveStore.set('lastFullName', fullName);
+    }
+    console.log(`[Auto Save] 最後にログインしたユーザー情報を保存しました: ${userId}`);
+});
+
+// 自動保存スケジューラーを初期化（app.whenReady()の後に実行される）
+function initAutoSaveScheduler() {
+    // 初回チェック（起動1分後）
+    setTimeout(() => {
+        autoSavePCInfo();
+    }, 60000);
+
+    // 定期的にチェック（1日1回）
+    setInterval(() => {
+        autoSavePCInfo();
+    }, CHECK_INTERVAL_MS);
+
+    console.log('[Auto Save] バックグラウンド自動保存スケジューラーを開始しました');
+}
 

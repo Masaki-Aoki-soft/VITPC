@@ -20,6 +20,8 @@ contextBridge.exposeInMainWorld('ipc', handler)
 // Electron APIを公開（レンダラープロセスで使用）
 contextBridge.exposeInMainWorld('electronAPI', {
   getConfig: () => ipcRenderer.invoke('get-config'),
+  saveLastUser: (userId: string, fullName?: string) => 
+    ipcRenderer.invoke('save-last-user', userId, fullName),
 })
 
 export type IpcHandler = typeof handler

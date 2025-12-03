@@ -117,6 +117,15 @@ const Dashboard: NextPage = () => {
         }
     }, [isSignedIn, isLoaded, router, isRefreshing, isValidating]);
 
+    // ユーザー情報をメインプロセスに保存（自動保存用）
+    useEffect(() => {
+        if (user?.id && typeof window !== 'undefined' && window.electronAPI) {
+            window.electronAPI.saveLastUser(user.id, user.fullName || undefined).catch((error) => {
+                console.error('ユーザー情報の保存に失敗:', error);
+            });
+        }
+    }, [user?.id, user?.fullName]);
+
     // PC情報を取得した後にサーバーに保存
     useEffect(() => {
         if (!pcInfo || !user?.id) return;
