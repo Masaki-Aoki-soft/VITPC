@@ -27,3 +27,5 @@ export const pcInfoTable = pgTable('pc_info', {
 export type PCInfo = typeof pcInfoTable.$inferSelect;
 export type NewPCInfo = typeof pcInfoTable.$inferInsert;
 
+
+

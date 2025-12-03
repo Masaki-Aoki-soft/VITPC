@@ -45,7 +45,7 @@ export const usePCInfo = (): UsePCInfoReturn => {
         }
     );
 
-    // mutate関数をラップして、成功時にtoastを表示
+    // mutate関数をラップ（トーストは呼び出し側で制御）
     const mutateWithToast = async (): Promise<PCInfo | undefined> => {
         try {
             // トークンを取得してPC情報を取得
@@ -54,10 +54,8 @@ export const usePCInfo = (): UsePCInfoReturn => {
 
             // SWRのキャッシュを更新
             const result = await mutate(pcInfo, { revalidate: false });
-            toast.success('PC情報を更新しました');
             return result;
         } catch (err: any) {
-            toast.error(err.message || 'PC情報の更新に失敗しました');
             throw err;
         }
     };

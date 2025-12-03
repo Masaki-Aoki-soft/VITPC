@@ -28,3 +28,5 @@ CREATE INDEX IF NOT EXISTS idx_pc_info_user_id ON pc_info(user_id);
 CREATE INDEX IF NOT EXISTS idx_pc_info_hostname ON pc_info(hostname);
 CREATE INDEX IF NOT EXISTS idx_pc_info_created_at ON pc_info(created_at);
 
+
+

@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import type { AppProps } from 'next/app';
+import { motion, AnimatePresence } from 'framer-motion';
 import { ClerkProvider } from '@clerk/clerk-react';
+import { useTheme } from 'next-themes';
 import '../styles/globals.css';
 import { ThemeProvider } from '@/components/theme-provider';
 import { ToasterContext } from '@/context/ToastContext';
@@ -176,12 +178,40 @@ function MyApp({ Component, pageProps }: AppProps) {
                 attribute="class"
                 defaultTheme="light"
                 enableSystem
-                disableTransitionOnChange
+                disableTransitionOnChange={false}
             >
                 <ToasterContext />
-                <Component {...pageProps} />
+                <ThemedComponent Component={Component} pageProps={pageProps} />
             </ThemeProvider>
         </ClerkProvider>
+    );
+}
+
+// テーマ変更時にフェードアニメーションを適用するコンポーネント
+function ThemedComponent({ Component, pageProps }: { Component: React.ComponentType<AppProps['Component']>; pageProps: AppProps['pageProps'] }) {
+    const { theme } = useTheme();
+    const [mounted, setMounted] = useState(false);
+
+    useEffect(() => {
+        setMounted(true);
+    }, []);
+
+    if (!mounted) {
+        return <Component {...pageProps} />;
+    }
+
+    return (
+        <AnimatePresence mode="wait">
+            <motion.div
+                key={theme}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.3, ease: "easeInOut" }}
+            >
+                <Component {...pageProps} />
+            </motion.div>
+        </AnimatePresence>
     );
 }
 

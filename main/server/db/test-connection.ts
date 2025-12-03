@@ -52,3 +52,5 @@ export async function checkTableExists(databaseUrl: string, tableName: string = 
     }
 }
 
+
+

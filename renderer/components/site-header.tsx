@@ -4,6 +4,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Switch } from '../components/ui/switch';
 import { useTheme } from 'next-themes';
@@ -21,7 +22,11 @@ import {
 import toast from 'react-hot-toast';
 import { UserResource } from '@clerk/types';
 
-export const Navbar = () => {
+interface NavbarProps {
+    isUpdating?: boolean;
+}
+
+export const Navbar = ({ isUpdating = false }: NavbarProps) => {
     const router = useRouter();
     const { isLoaded: authLoaded, isSignedIn } = useAuth();
     const { signOut } = useClerk();
@@ -84,7 +89,7 @@ export const Navbar = () => {
 
     // ログアウトの処理
     const handleLogout = async () => {
-        if (isSigningOut || !authLoaded) return;
+        if (isSigningOut || !authLoaded || isUpdating) return;
 
         setIsSigningOut(true);
 
@@ -154,20 +159,40 @@ export const Navbar = () => {
 
     // テーマがダークモードかどうかを判定
     const isDarkMode = theme === 'dark';
+    const [isTransitioning, setIsTransitioning] = useState(false);
 
     // スイッチの状態が変更されたときにテーマを切り替える関数
     const handleThemeChange = (checked: boolean) => {
+        setIsTransitioning(true);
         setTheme(checked ? 'dark' : 'light');
+        // アニメーション完了後に状態をリセット
+        setTimeout(() => {
+            setIsTransitioning(false);
+        }, 500);
     };
 
     return (
         <nav className="w-full">
-            <header className="w-full bg-white dark:bg-gray-900 shadow sticky top-0 z-50">
-                <div className="w-full">
-                    <div className="flex justify-between items-center py-2 sm:py-3 lg:py-4">
+            <AnimatePresence mode="wait">
+                <motion.header
+                    key={theme}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.3, ease: "easeInOut" }}
+                    className="w-full bg-white dark:bg-gray-900 shadow sticky top-0 z-50"
+                >
+                    <div className="w-full">
+                        <div className="flex justify-between items-center py-2 sm:py-3 lg:py-4">
                         <div
-                            className="flex items-center min-w-0 flex-1 cursor-pointer pl-4 sm:pl-6 lg:pl-8"
-                            onClick={() => router.push('/')}
+                            className={`flex items-center min-w-0 flex-1 pl-4 sm:pl-6 lg:pl-8 ${
+                                isUpdating ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
+                            }`}
+                            onClick={() => {
+                                if (!isUpdating) {
+                                    router.push('/');
+                                }
+                            }}
                         >
                             <Monitor className="h-5 w-5 sm:h-7 sm:w-7 text-blue-600 mr-2 sm:mr-3 flex-shrink-0" />
                             <h1 className="text-base sm:text-xl lg:text-2xl font-bold text-gray-900 dark:text-gray-100 truncate">
@@ -182,6 +207,7 @@ export const Navbar = () => {
                                     <Switch
                                         checked={isDarkMode}
                                         onCheckedChange={handleThemeChange}
+                                        disabled={isUpdating}
                                     />
                                     <Moon className="h-5 w-5" />
                                 </div>
@@ -193,7 +219,7 @@ export const Navbar = () => {
                                     <Button
                                         variant="ghost"
                                         className="h-auto p-0 hover:bg-transparent"
-                                        disabled={isSigningOut || !authLoaded}
+                                        disabled={isSigningOut || !authLoaded || isUpdating}
                                     >
                                         <div className="flex items-center space-x-2 sm:space-x-3 cursor-pointer">
                                             <Avatar className="h-7 w-7 sm:h-9 sm:w-9">
@@ -242,9 +268,15 @@ export const Navbar = () => {
                                     </DropdownMenuLabel>
                                     <DropdownMenuSeparator />
                                     <DropdownMenuItem
-                                        className="cursor-pointer text-blue-500 hover:!bg-blue-100 focus:!text-blue-600 focus:!bg-blue-100 dark:text-blue-400 dark:hover:!bg-gray-700 dark:focus:!bg-gray-700 py-2"
-                                        onClick={() => router.push('/setting')}
-                                        disabled={isSigningOut || !authLoaded}
+                                        className={`cursor-pointer text-blue-500 hover:!bg-blue-100 focus:!text-blue-600 focus:!bg-blue-100 dark:text-blue-400 dark:hover:!bg-gray-700 dark:focus:!bg-gray-700 py-2 ${
+                                            isUpdating ? 'opacity-50 cursor-not-allowed' : ''
+                                        }`}
+                                        onClick={() => {
+                                            if (!isUpdating) {
+                                                router.push('/setting');
+                                            }
+                                        }}
+                                        disabled={isSigningOut || !authLoaded || isUpdating}
                                     >
                                         <Settings className="mr-3 h-4 w-4 text-blue-500 dark:text-blue-400 flex-shrink-0" />
                                         <span className="text-sm">設定</span>
@@ -252,12 +284,12 @@ export const Navbar = () => {
                                     <DropdownMenuSeparator />
                                     <DropdownMenuItem
                                         className={`text-red-600 hover:!bg-red-100 focus:!text-red-600 cursor-pointer focus:!bg-red-100 dark:text-red-400 dark:hover:!bg-red-900/50 dark:focus:!bg-red-900/50 py-2 ${
-                                            isSigningOut || !authLoaded
+                                            isSigningOut || !authLoaded || isUpdating
                                                 ? 'opacity-50 cursor-not-allowed'
                                                 : ''
                                         }`}
                                         onClick={handleLogout}
-                                        disabled={isSigningOut || !authLoaded}
+                                        disabled={isSigningOut || !authLoaded || isUpdating}
                                     >
                                         {isSigningOut ? (
                                             <Loader2 className="mr-3 h-4 w-4 animate-spin flex-shrink-0" />
@@ -271,9 +303,10 @@ export const Navbar = () => {
                                 </DropdownMenuContent>
                             </DropdownMenu>
                         </div>
+                        </div>
                     </div>
-                </div>
-            </header>
+                </motion.header>
+            </AnimatePresence>
         </nav>
     );
 };
